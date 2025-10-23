@@ -1,0 +1,1251 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barcode Scanner</title>
+    <script src="https://unpkg.com/@zxing/library@latest"></script>
+    <!-- GSAP for simple split animations (CDN) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.0/gsap.min.js"></script>
+    <style>
+        :root{
+            --bg: #f0f0f0;
+            --card-bg: #ffffff;
+            --text: #222222;
+            --muted: #666666;
+            --accent: #2196F3;
+            --accent-hover: #1976D2;
+            --success-bg: #e8f5e9;
+            --error-bg: #ffebee;
+            --border-color: rgba(0,0,0,0.12);
+            --button-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            --video-border: #2196F3;
+        }
+
+        .theme-dark{
+            --bg: #0a0f16;
+            --card-bg: #151c28;
+            --text: #e6eef8;
+            --muted: #9fb0c8;
+            --accent: #60a5fa;
+            --accent-hover: #3b82f6;
+            --success-bg: #07361b;
+            --error-bg: #3b0b0b;
+            --border-color: rgba(255,255,255,0.12);
+            --button-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            --video-border: #60a5fa;
+        }
+
+        body {
+            font-family: 'Segoe UI', sans-serif;
+            margin: 0;
+            padding: 12px;
+            background-color: var(--bg);
+            color: var(--text);
+            transition: background-color 0.25s, color 0.25s;
+            min-height: 100vh;
+        }
+
+        @media (max-width: 768px) {
+            body {
+                padding: 0;
+            }
+        }
+
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 12px;
+                border-radius: 0;
+                min-height: 100vh;
+                display: flex;
+                flex-direction: column;
+            }
+        }
+
+        h1 {
+            color: var(--accent);
+            text-align: center;
+            margin-bottom: 10px;
+        }
+
+        .header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        @media (max-width: 768px) {
+            .header-row {
+                position: sticky;
+                top: 0;
+                background: var(--card-bg);
+                padding: 12px;
+                margin: -12px -12px 12px -12px;
+                z-index: 10;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            }
+
+            .header-row h1 {
+                font-size: 1.5rem;
+                margin: 0;
+            }
+        }
+
+        /* Modern button visuals - only appearance changes */
+        .action-buttons {
+            display: flex;
+            gap: 12px;
+            margin-top: 16px;
+        }
+
+        .btn-action, .theme-toggle, .upload-button, .camera-switch {
+            --btn-bg: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02));
+            --btn-accent: var(--accent);
+            --btn-accent-2: var(--accent-hover);
+            appearance: none;
+            border: none;
+            background: transparent;
+            padding: 0;
+            cursor: pointer;
+            font: inherit;
+        }
+
+        .btn-action > span, .theme-toggle > span, .upload-button > span {
+            display: inline-block;
+            padding: 12px 18px;
+            border-radius: 12px;
+            min-width: 140px;
+            text-align: center;
+            color: var(--text);
+            background: linear-gradient(135deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
+            border: 1px solid rgba(0,0,0,0.06);
+            box-shadow: 0 6px 18px rgba(11,22,34,0.06);
+            transition: all 240ms cubic-bezier(.22,.9,.38,1);
+            font-weight: 600;
+            letter-spacing: 0.2px;
+            transform: translateY(8px);
+            opacity: 0;
+        }
+
+        /* Accent primary button style */
+        .btn-action.primary > span {
+            color: white;
+            background: linear-gradient(135deg, var(--btn-accent), var(--btn-accent-2));
+            box-shadow: 0 8px 20px rgba(33,150,243,0.18);
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+
+        .btn-action.ghost > span {
+            color: var(--text);
+            background: transparent;
+            border: 1px solid rgba(0,0,0,0.06);
+        }
+
+        .btn-action:hover > span, .theme-toggle:hover > span, .upload-button:hover > span {
+            transform: translateY(-4px) scale(1.01);
+            box-shadow: 0 10px 30px rgba(11,22,34,0.12);
+        }
+
+        .btn-action:active > span, .theme-toggle:active > span {
+            transform: translateY(-1px) scale(0.998);
+            box-shadow: 0 6px 18px rgba(11,22,34,0.08);
+        }
+
+        /* Mobile: full width tappable buttons */
+        @media (max-width: 768px) {
+            .btn-action > span, .upload-button > span {
+                width: 100%;
+                min-width: auto;
+            }
+            .action-buttons { flex-direction: column; }
+        }
+
+    /* Specific color adjustments for save/new-scan */
+    #saveBtn > span { background: linear-gradient(135deg, var(--accent), var(--accent-hover)); color: white; }
+    #newScanBtn > span { background: linear-gradient(135deg, var(--accent), var(--accent-hover)); color: white; }
+
+        /* theme toggle smaller */
+        .theme-toggle > span { padding: 8px 12px; border-radius: 10px; min-width: auto; }
+
+        @media (max-width: 768px) {
+            .action-buttons {
+                flex-direction: column;
+                gap: 12px;
+                margin-top: 20px;
+                padding: 0 4px;
+            }
+
+            .btn-action {
+                width: 100%;
+                padding: 16px;
+                font-size: 1rem;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+                letter-spacing: 0.5px;
+            }
+
+            .btn-action::after {
+                content: '→';
+                opacity: 0;
+                transform: translateX(-8px);
+                transition: all 0.3s ease;
+            }
+
+            .btn-action:hover::after {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        /* Modern pill theme toggle */
+        .theme-toggle > span {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 14px;
+            border-radius: 999px;
+            background: linear-gradient(90deg, rgba(255,255,255,0.02), rgba(0,0,0,0.02));
+            border: 1px solid rgba(0,0,0,0.06);
+            color: var(--text);
+            box-shadow: 0 6px 18px rgba(11,22,34,0.06);
+            min-width: 64px;
+            justify-content: center;
+            font-weight: 600;
+        }
+
+        .theme-toggle[data-theme="dark"] > span {
+            background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+            color: white;
+            box-shadow: 0 8px 22px rgba(33,150,243,0.18);
+        }
+
+        .theme-toggle:hover > span {
+            transform: translateY(-3px);
+        }
+
+        .video-container {
+            width: 100%;
+            margin-bottom: 20px;
+            flex-shrink: 0;
+        }
+
+        @media (max-width: 768px) {
+            .video-container {
+                margin: -12px -12px 16px -12px;
+                width: calc(100% + 24px);
+            }
+        }
+
+        #video {
+            width: 100%;
+            max-height: 70vh;
+            object-fit: cover;
+            border-radius: 8px;
+            border: 2px solid var(--video-border);
+            transition: border-color 0.3s ease;
+        }
+
+        @media (max-width: 768px) {
+            #video {
+                border-radius: 0;
+                border-left: 0;
+                border-right: 0;
+                max-height: 50vh;
+            }
+        }
+
+        .result-container {
+            background: var(--card-bg);
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+            border: 1px solid var(--border-color);
+        }
+
+        @media (max-width: 768px) {
+            .result-container {
+                padding: 16px;
+                border-radius: 12px;
+                margin-top: 0;
+                flex-grow: 1;
+                border: none;
+                background: var(--bg);
+            }
+        }
+
+        .product-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: var(--card-bg);
+            border-radius: 8px;
+            border: 1px solid var(--border-color);
+        }
+
+        @media (max-width: 768px) {
+            .product-info {
+                padding: 16px;
+                border-radius: 12px;
+                margin: 16px 0;
+                background: var(--card-bg);
+            }
+
+            .product-info img {
+                width: 100%;
+                max-width: 300px;
+                height: auto;
+                margin: 12px auto;
+                display: block;
+                border-radius: 8px;
+            }
+        }
+
+        .product-info img {
+            max-width: 200px;
+            height: auto;
+            margin: 10px 0;
+        }
+
+        /* Minimal split styles for plain HTML animation */
+        .split-inner { display: inline-block; }
+        .split-char { display: inline-block; white-space: pre; will-change: transform, opacity; backface-visibility: hidden; opacity: 0; transform: translateY(0.6rem); }
+
+        .loading {
+            text-align: center;
+            color: var(--muted);
+            padding: 20px;
+            display: none;
+        }
+
+        #statusMessage {
+            padding: 10px;
+            margin-top: 10px;
+            border-radius: 4px;
+            display: none;
+        }
+
+        .success {
+            background-color: var(--success-bg);
+            color: var(--text);
+        }
+
+        .error {
+            background-color: var(--error-bg);
+            color: var(--text);
+        }
+
+        .upload-container {
+            margin-top: 12px;
+            text-align: center;
+        }
+
+        .upload-button {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: var(--accent);
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: var(--button-shadow);
+        }
+
+        .upload-button:hover {
+            background: var(--accent-hover);
+            transform: translateY(-1px);
+        }
+
+        .upload-button svg {
+            transition: transform 0.2s ease;
+        }
+
+        .upload-button:hover svg {
+            transform: translateY(-2px);
+        }
+
+        .camera-switch {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0, 0, 0, 0.6);
+            border: none;
+            border-radius: 50%;
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            color: white;
+            transition: all 0.3s ease;
+            opacity: 0.8;
+            z-index: 5;
+        }
+
+        .camera-switch:hover {
+            opacity: 1;
+            transform: scale(1.1);
+        }
+
+        .camera-switch svg {
+            transition: transform 0.3s ease;
+        }
+
+        .camera-switch:active svg {
+            transform: rotate(180deg);
+        }
+
+        /* Kamera-Switch auf Mobilgeräten anzeigen */
+        @media (max-width: 768px) {
+            .camera-switch {
+                opacity: 1;
+            }
+        }
+
+        .warning-overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0,0,0,0.8);
+            color: #fff;
+            padding: 12px 20px;
+            border-radius: 8px;
+            display: none;
+            z-index: 10;
+            text-align: center;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 0.8; }
+            50% { opacity: 1; }
+            100% { opacity: 0.8; }
+        }
+
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        /* Manual input styles */
+        #manualPanel input[type="text"] {
+            font-size: 1rem;
+        }
+        @media (max-width:768px) {
+            #manualPanel { padding: 8px 0; }
+            #manualPanel input[type="text"] { font-size: 0.95rem; }
+        }
+    </style>
+</head>
+<body>
+        <div class="container">
+                <div class="header-row">
+                        <h1>Barcode Scanner</h1>
+                        <div style="display:flex; gap:10px; align-items:center;">
+                            <button id="manualToggle" class="theme-toggle"><span>Manuell</span></button>
+                            <button id="themeToggle" class="theme-toggle"><span>Dark</span></button>
+                        </div>
+                </div>
+        
+        <div class="video-container">
+            <div class="video-wrapper">
+                <video id="video"></video>
+                <div id="lightWarning" class="warning-overlay">
+                    <div>⚠️ Zu wenig Licht!</div>
+                    <small>Bitte für bessere Scanergebnisse mehr Licht hinzufügen</small>
+                </div>
+                <button id="switchCamera" class="camera-switch">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
+                        <circle cx="12" cy="13" r="4"/>
+                        <path d="M17 9l-1.8 1.8"/>
+                        <path d="M7 9l1.8 1.8"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="upload-container">
+                <label for="imageUpload" class="upload-button">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="17 8 12 3 7 8"/>
+                        <line x1="12" y1="3" x2="12" y2="15"/>
+                    </svg>
+                    <span>Bild hochladen</span>
+                </label>
+                <input type="file" id="imageUpload" accept="image/*" style="display: none;">
+                <div style="margin-top:10px; display:flex; gap:8px; align-items:center; justify-content:center;">
+                    <input id="imageUrlInput" type="url" placeholder="https://example.com/bild.jpg" style="padding:8px 10px; border-radius:8px; border:1px solid rgba(0,0,0,0.08); width:60%;">
+                    <button id="scanUrlBtn" class="btn-action primary"><span>Scan URL</span></button>
+                </div>
+            </div>
+        </div>
+
+        <div class="result-container">
+            <h3>Letzter Scan:</h3>
+            <div id="barcodeValue">Noch kein Barcode gescannt</div>
+            <div class="action-buttons">
+                    <button id="saveBtn" onclick="saveCurrentProduct()" class="btn-action primary"><span>Produkt speichern</span></button>
+                    <button id="newScanBtn" onclick="clearCurrent()" class="btn-action primary"><span>Neuer Scan</span></button>
+            </div>
+            <!-- Manual entry panel -->
+            <div id="manualPanel" style="display:none; margin-top:16px;">
+                <div style="display:flex; gap:8px; align-items:center;">
+                    <input id="manualInput" type="text" placeholder="Barcode eingeben (z.B. 4008400402222)" style="flex:1; padding:10px 12px; border-radius:10px; border:1px solid rgba(0,0,0,0.08);">
+                    <button id="manualScanBtn" class="btn-action primary"><span>Verarbeiten</span></button>
+                    <button id="manualClearBtn" class="btn-action ghost"><span>Abbrechen</span></button>
+                </div>
+            </div>
+        </div>
+
+        <div id="loading" class="loading">
+            Suche Produktinformationen...
+        </div>
+
+        <div id="productInfo" class="product-info"></div>
+        <div id="savedList" class="product-info" style="margin-top:16px; display:none;"></div>
+        <div id="statusMessage"></div>
+    </div>
+
+    <script>
+    // Globale Variablen für Kamera-Steuerung
+    let currentFacingMode = 'environment'; // 'environment' ist die Rückkamera
+    let codeReader = null;
+    let videoStream = null;
+
+    // Kamera wechseln
+    async function switchCamera() {
+        try {
+            // Alte Kamera stoppen
+            if (videoStream) {
+                videoStream.getTracks().forEach(track => track.stop());
+            }
+            
+            // Kamera-Richtung umschalten
+            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            
+            // Animation für den Wechsel
+            const video = document.getElementById('video');
+            await gsap.to(video, {
+                opacity: 0,
+                scale: 0.8,
+                duration: 0.3
+            });
+            
+            // Neue Kamera starten
+            const constraints = {
+                video: {
+                    facingMode: currentFacingMode,
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    aspectRatio: { ideal: 1.777778 }
+                }
+            };
+            
+            // Stream holen und Video-Element aktualisieren
+            videoStream = await navigator.mediaDevices.getUserMedia(constraints);
+            video.srcObject = videoStream;
+            await video.play();
+            
+            // Scanner neu initialisieren
+            if (codeReader) {
+                codeReader.reset();
+                initBarcodeScanner();
+            }
+            
+            // Animation zurück
+            gsap.to(video, {
+                opacity: 1,
+                scale: 1,
+                duration: 0.3
+            });
+
+            // Button-Animation
+            gsap.to('#switchCamera svg', {
+                rotation: '+=180',
+                duration: 0.5,
+                ease: 'power2.out'
+            });
+            
+        } catch (error) {
+            console.error('Fehler beim Kamerawechsel:', error);
+            showStatus('Kamerawechsel nicht möglich', 'error');
+        }
+    }
+
+    // Barcode-Scanner initialisieren
+    async function initBarcodeScanner() {
+        try {
+            codeReader = new ZXing.BrowserMultiFormatReader();
+            const hints = new Map();
+            hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                ZXing.BarcodeFormat.EAN_13,
+                ZXing.BarcodeFormat.EAN_8,
+                ZXing.BarcodeFormat.CODE_128,
+                ZXing.BarcodeFormat.CODE_39,
+                ZXing.BarcodeFormat.UPC_A,
+                ZXing.BarcodeFormat.UPC_E
+            ]);
+            hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+
+            codeReader.decodeFromVideoDevice(undefined, 'video', (result, err) => {
+                if (result) {
+                    try {
+                        const text = result.getText();
+                        if (text && text !== lastBarcode) {
+                            lastBarcode = text;
+                            document.getElementById('barcodeValue').textContent = lastBarcode;
+                            gsap.to('#video', {
+                                borderColor: '#4CAF50',
+                                duration: 0.3,
+                                yoyo: true,
+                                repeat: 1,
+                                onComplete: () => {
+                                    gsap.to('#video', {
+                                        borderColor: 'var(--video-border)',
+                                        duration: 0.3
+                                    });
+                                }
+                            });
+                            showStatus('Barcode erkannt!', 'success');
+                            fetchProductInfo(lastBarcode);
+                        }
+                    } catch (e) {
+                        console.error('Fehler beim Verarbeiten des Ergebnisses:', e);
+                    }
+                }
+            }, hints);
+        } catch (error) {
+            console.error('Scanner-Initialisierung fehlgeschlagen:', error);
+            showStatus('Scanner-Initialisierung fehlgeschlagen', 'error');
+        }
+    }
+
+    // Bild-Upload und Barcode-Scanning
+    async function handleImageUpload(file) {
+        try {
+            // Bild in Canvas laden
+            const img = new Image();
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+
+            await new Promise((resolve, reject) => {
+                img.onload = resolve;
+                img.onerror = reject;
+                img.src = URL.createObjectURL(file);
+            });
+
+            // Canvas-Größe an Bild anpassen
+            canvas.width = img.width;
+            canvas.height = img.height;
+            ctx.drawImage(img, 0, 0);
+
+            // ZXing BrowserMultiFormatReader initialisieren
+            const codeReader = new ZXing.BrowserMultiFormatReader();
+            
+            try {
+                // Barcode im Bild suchen
+                const result = await codeReader.decodeFromImageElement(img);
+                
+                if (result) {
+                    const text = result.getText();
+                    if (text && text !== lastBarcode) {
+                        lastBarcode = text;
+                        document.getElementById('barcodeValue').textContent = lastBarcode;
+                        showStatus('Barcode im Bild gefunden!', 'success');
+                        fetchProductInfo(lastBarcode);
+
+                        // Erfolgs-Animation
+                        gsap.from('#barcodeValue', {
+                            scale: 0.5,
+                            opacity: 0,
+                            duration: 0.5,
+                            ease: 'back.out'
+                        });
+                    }
+                }
+            } catch (error) {
+                console.error('Barcode-Scan Fehler:', error);
+                showStatus('Kein Barcode im Bild gefunden', 'error');
+            }
+
+        } catch (error) {
+            console.error('Bild-Verarbeitung Fehler:', error);
+            showStatus('Fehler beim Verarbeiten des Bildes', 'error');
+        }
+    }
+
+    // Initialize GSAP animations and theme handling
+    document.addEventListener('DOMContentLoaded', () => {
+        // Kamera-Wechsel Button Event-Listener
+        const switchBtn = document.getElementById('switchCamera');
+        if (switchBtn) {
+            // Prüfen ob mehrere Kameras verfügbar sind
+            navigator.mediaDevices.enumerateDevices()
+                .then(devices => {
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    if (videoDevices.length <= 1) {
+                        // Wenn nur eine Kamera, Button ausblenden
+                        switchBtn.style.display = 'none';
+                    }
+                })
+                .catch(err => {
+                    console.error('Fehler beim Prüfen der Kameras:', err);
+                    switchBtn.style.display = 'none';
+                });
+
+            switchBtn.addEventListener('click', switchCamera);
+        }
+
+        // Bild-Upload Event-Listener
+        const imageUpload = document.getElementById('imageUpload');
+        if (imageUpload) {
+            imageUpload.addEventListener('change', (e) => {
+                const file = e.target.files[0];
+                if (file) {
+                    handleImageUpload(file);
+                    // Upload-Feld zurücksetzen für erneutes Hochladen des gleichen Bildes
+                    e.target.value = '';
+                }
+            });
+        }
+        // Scan from URL
+        const scanUrlBtn = document.getElementById('scanUrlBtn');
+        const imageUrlInput = document.getElementById('imageUrlInput');
+        if (scanUrlBtn && imageUrlInput) {
+            scanUrlBtn.addEventListener('click', async () => {
+                let url = imageUrlInput.value.trim();
+                if (!url) { showStatus('Bitte eine Bild-URL eingeben', 'error'); return; }
+
+                // If user pasted without protocol, try to assume https
+                if (!/^https?:\/\//i.test(url) && !/^data:/i.test(url)) {
+                    url = 'https://' + url;
+                }
+
+                showStatus('Bild wird geladen...', 'success');
+
+                // 1) data URL handling
+                if (/^data:/i.test(url)) {
+                    try {
+                        const res = await fetch(url);
+                        const blob = await res.blob();
+                        const file = new File([blob], 'data-image', { type: blob.type });
+                        await handleImageUpload(file);
+                        return;
+                    } catch (e) {
+                        console.error('Data-URL Fehler', e);
+                        showStatus('Fehler beim Verarbeiten der Data-URL', 'error');
+                        return;
+                    }
+                }
+
+                // helper to try fetch
+                const tryFetch = async (u) => {
+                    const res = await fetch(u, { mode: 'cors' });
+                    if (!res.ok) throw new Error('Netzwerkfehler');
+                    const blob = await res.blob();
+                    if (!blob.type.startsWith('image/')) throw new Error('Kein Bild');
+                    return new File([blob], 'remote-image', { type: blob.type });
+                };
+
+                try {
+                    // first attempt: direct fetch
+                    const file = await tryFetch(url);
+                    await handleImageUpload(file);
+                    return;
+                } catch (err) {
+                    console.warn('Direkter Fetch fehlgeschlagen, versuche Bild-Element-Fallback', err);
+                }
+
+                // fallback: load into Image element (may still fail due to CORS)
+                try {
+                    await new Promise((resolve, reject) => {
+                        const img = new Image();
+                        img.crossOrigin = 'anonymous';
+                        img.onload = async () => {
+                            try {
+                                const canvas = document.createElement('canvas');
+                                canvas.width = img.naturalWidth;
+                                canvas.height = img.naturalHeight;
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(img, 0, 0);
+                                canvas.toBlob(async (blob) => {
+                                    if (!blob) return reject(new Error('Blob fehlgeschlagen'));
+                                    const file = new File([blob], 'img-fallback', { type: blob.type });
+                                    await handleImageUpload(file);
+                                    resolve();
+                                });
+                            } catch (e) { reject(e); }
+                        };
+                        img.onerror = (e) => reject(new Error('Image load failed'));
+                        img.src = url;
+                    });
+                    return;
+                } catch (err) {
+                    console.warn('Image element fallback failed:', err);
+                }
+
+                // last resort: try a public CORS proxy (note privacy/security)
+                try {
+                    const proxy = 'https://cors.bridged.cc/'; // public proxy; may be rate-limited
+                    showStatus('Direkter Zugriff fehlgeschlagen — versuche Proxy (Achtung: Datenschutz)', 'error');
+                    const file = await tryFetch(proxy + url);
+                    await handleImageUpload(file);
+                    return;
+                } catch (err) {
+                    console.error('Alle Versuche fehlgeschlagen:', err);
+                    showStatus('Bild konnte nicht geladen werden (CORS/Netzwerk)', 'error');
+                }
+            });
+        }
+        // Theme handling: apply saved theme or default to light
+        const saved = localStorage.getItem('theme');
+        if(saved === 'dark') document.documentElement.classList.add('theme-dark');
+        
+        // Animate UI elements on load
+        gsap.to('.btn-action > span, .theme-toggle > span, .upload-button > span', {
+            opacity: 1,
+            y: 0,
+            duration: 0.6,
+            stagger: 0.08,
+            ease: 'power2.out'
+        });
+
+        gsap.from('.container', {
+            opacity: 0,
+            y: 20,
+            duration: 0.8,
+            ease: 'power2.out'
+        });
+
+        const btn = document.getElementById('themeToggle');
+        if(btn) {
+            const label = btn.querySelector('span');
+            const isDark = document.documentElement.classList.contains('theme-dark');
+            if(label) label.textContent = isDark ? 'Light' : 'Dark';
+            btn.setAttribute('data-theme', isDark ? 'dark' : 'light');
+            btn.addEventListener('click', toggleTheme);
+        }
+        // Manual mode toggle
+        const manualToggle = document.getElementById('manualToggle');
+        const manualPanel = document.getElementById('manualPanel');
+        const manualScanBtn = document.getElementById('manualScanBtn');
+        const manualClearBtn = document.getElementById('manualClearBtn');
+        const manualInput = document.getElementById('manualInput');
+        if (manualToggle && manualPanel) {
+            manualToggle.addEventListener('click', () => {
+                const open = manualPanel.style.display !== 'block';
+                manualPanel.style.display = open ? 'block' : 'none';
+                manualToggle.classList.toggle('active', open);
+                if (open) manualInput.focus();
+            });
+        }
+        if (manualScanBtn && manualInput) {
+            manualScanBtn.addEventListener('click', () => {
+                const code = manualInput.value.trim();
+                if (!code) { showStatus('Bitte eine Barcode-Nummer eingeben', 'error'); return; }
+                lastBarcode = code;
+                document.getElementById('barcodeValue').textContent = lastBarcode;
+                showStatus('Manueller Barcode gesetzt', 'success');
+                fetchProductInfo(lastBarcode);
+                // close panel
+                if (manualPanel) manualPanel.style.display = 'none';
+            });
+        }
+        if (manualClearBtn && manualInput && manualPanel) {
+            manualClearBtn.addEventListener('click', () => {
+                manualInput.value = '';
+                manualPanel.style.display = 'none';
+            });
+        }
+    });
+
+    function toggleTheme(){
+        const root = document.documentElement;
+        const btn = document.getElementById('themeToggle');
+        const isDark = root.classList.contains('theme-dark');
+        
+        // Animate theme transition
+        gsap.to('.container', {
+            opacity: 0,
+            scale: 0.98,
+            duration: 0.2,
+            ease: 'power2.in',
+            onComplete: () => {
+                if(isDark){
+                    root.classList.remove('theme-dark');
+                    localStorage.setItem('theme','light');
+                    if(btn) {
+                        const l = btn.querySelector('span'); if(l) l.textContent = 'Dark';
+                        btn.setAttribute('data-theme','light');
+                    }
+                } else {
+                    root.classList.add('theme-dark');
+                    localStorage.setItem('theme','dark');
+                    if(btn) {
+                        const l = btn.querySelector('span'); if(l) l.textContent = 'Light';
+                        btn.setAttribute('data-theme','dark');
+                    }
+                }
+                
+                gsap.to('.container', {
+                    opacity: 1,
+                    scale: 1,
+                    duration: 0.3,
+                    ease: 'power2.out'
+                });
+            }
+        });
+    }
+    window.toggleTheme = toggleTheme;
+    let lastBarcode = null;
+    let lastProduct = null; // last fetched product data
+    let isScanning = true;
+    // runtime-only saved products (will be lost on reload)
+    let savedProducts = [];
+
+        // Status-Nachricht anzeigen
+        function showStatus(message, type) {
+            const status = document.getElementById('statusMessage');
+            status.textContent = message;
+            status.className = type;
+            status.style.display = 'block';
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, 3000);
+        }
+
+        function renderSavedList() {
+            const list = document.getElementById('savedList');
+            if (!savedProducts.length) {
+                list.style.display = 'none';
+                return;
+            }
+            list.style.display = 'block';
+            list.innerHTML = '<h4>Gespeicherte Produkte (nur temporär)</h4>' + savedProducts.map((p, i) => `\
+                <div style="padding:8px; border-bottom:1px solid #ddd;">\
+                    <strong>${escapeHtml(p.name)}</strong><br/>\
+                    <small>Barcode: ${escapeHtml(p.barcode)}</small>\
+                    <div style="margin-top:6px;">\
+                        <button onclick="removeSaved(${i})">Entfernen</button>\
+                    </div>\
+                </div>`).join('');
+        }
+
+        function saveCurrentProduct() {
+            if (!lastProduct || !lastBarcode) {
+                showStatus('Kein Produkt zum Speichern verfügbar', 'error');
+                return;
+            }
+            savedProducts.push({ barcode: lastBarcode, name: lastProduct.name || lastProduct.product_name || 'Produkt' });
+            renderSavedList();
+            showStatus('Produkt temporär gespeichert (verschwindet beim Neuladen)', 'success');
+        }
+
+        function removeSaved(index) {
+            savedProducts.splice(index, 1);
+            renderSavedList();
+        }
+
+        function clearCurrent() {
+            lastBarcode = null;
+            lastProduct = null;
+            document.getElementById('barcodeValue').textContent = 'Noch kein Barcode gescannt';
+            document.getElementById('productInfo').innerHTML = '';
+            showStatus('Bereit für neuen Scan', 'success');
+        }
+
+        // Produktinformationen von OpenFoodFacts abrufen
+        async function fetchProductInfo(barcode) {
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('productInfo').innerHTML = '';
+
+            try {
+                const url = `https://de.openfoodfacts.org/api/v0/product/${barcode}.json`;
+                const response = await fetch(url);
+                const data = await response.json();
+
+                if (data.status === 1 && data.product) {
+                    const p = data.product;
+                    const productName = p.product_name || p.generic_name || 'Produkt';
+                    const brand = (p.brands && p.brands.split(',')[0]) || 'Nicht verfügbar';
+                    const categories = p.categories || 'Nicht verfügbar';
+                    const img = p.image_small_url || p.image_url || '';
+                    const nutriments = p.nutriments || {};
+
+                    let html = `
+                        <h3>${escapeHtml(productName)}</h3>
+                        ${img ? `<img src="${img}" alt="Produktbild">` : ''}
+                        <p><strong>Marke:</strong> ${escapeHtml(brand)}</p>
+                        <p><strong>Kategorien:</strong> ${escapeHtml(categories)}</p>
+                        <p><strong>Nutri-Score:</strong> ${p.nutrition_grade_fr || 'Nicht verfügbar'}</p>
+                        <p><strong>Nährwerte (pro 100g):</strong></p>
+                        <ul>
+                            ${nutriments['energy_100g'] ? `<li>Energie: ${nutriments['energy_100g']} kJ</li>` : ''}
+                            ${nutriments['fat_100g'] ? `<li>Fett: ${nutriments['fat_100g']} g</li>` : ''}
+                            ${nutriments['sugars_100g'] ? `<li>Zucker: ${nutriments['sugars_100g']} g</li>` : ''}
+                            ${nutriments['salt_100g'] ? `<li>Salz: ${nutriments['salt_100g']} g</li>` : ''}
+                        </ul>
+                        <p><a href="https://de.openfoodfacts.org/produkt/${barcode}" target="_blank" rel="noopener">Mehr Details auf OpenFoodFacts</a></p>
+                    `;
+
+                    // Speichere das gefundene Produkt temporär im Script
+                    lastProduct = {
+                        barcode: barcode,
+                        name: productName,
+                        brand: brand,
+                        categories: categories,
+                        image: img,
+                        nutriments: nutriments,
+                        raw: p
+                    };
+
+                    document.getElementById('productInfo').innerHTML = html;
+                    // animate any headings or text inside productInfo
+                    setTimeout(() => splitAndAnimate(document.getElementById('productInfo')), 50);
+                    showStatus('Produktinformationen gefunden!', 'success');
+                } else {
+                    document.getElementById('productInfo').innerHTML = '<p>Keine Produktinformationen in OpenFoodFacts gefunden</p>';
+                    showStatus('Kein Produkt in OpenFoodFacts gefunden', 'error');
+                }
+            } catch (error) {
+                document.getElementById('productInfo').innerHTML = '<p>Fehler beim Abrufen der Produktinformationen</p>';
+                showStatus('Fehler beim Suchen der Produktinformationen', 'error');
+                console.error(error);
+            } finally {
+                document.getElementById('loading').style.display = 'none';
+            }
+        }
+
+        // einfache HTML-Escape-Hilfe
+        function escapeHtml(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        }
+
+        // Einfacher Animate-Helfer: spaltet Text in Zeichen und animiert sie mit GSAP
+        // Diese Version entfernt vorherige Splits, damit eine neue Animation pro Produkt möglich ist.
+        function animateText(container) {
+            if (!window.gsap) return;
+            const elements = container.querySelectorAll('h1, h2, h3, h4, p');
+            elements.forEach(el => {
+                // remove previous split if exists
+                if (el._splitWrapper) {
+                    try { el.removeChild(el._splitWrapper); } catch(e) {}
+                    el._splitWrapper = null;
+                    delete el.dataset.split;
+                }
+
+                const text = el.textContent || '';
+                // create wrapper
+                const wrapper = document.createElement('span');
+                wrapper.className = 'split-inner';
+                // add spans for each character
+                [...text].forEach(ch => {
+                    const span = document.createElement('span');
+                    span.className = 'split-char';
+                    span.textContent = ch;
+                    wrapper.appendChild(span);
+                });
+                // replace content
+                el.textContent = '';
+                el.appendChild(wrapper);
+                el._splitWrapper = wrapper;
+                el.dataset.split = '1';
+
+                const chars = wrapper.querySelectorAll('.split-char');
+                // set initial state and animate with a timeline
+                const tl = gsap.timeline();
+                tl.set(chars, { opacity: 0, y: 20 });
+                tl.to(chars, { opacity: 1, y: 0, stagger: 0.02, ease: 'power3.out', duration: 0.6 });
+            });
+        }
+
+        // Scanner initialisieren
+        async function initScanner() {
+            try {
+                // Standard Konfiguration für die Kamera
+                const constraints = {
+                    video: { 
+                        facingMode: "environment",  // Rückkamera bevorzugen
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        aspectRatio: { ideal: 1.777778 },
+                        frameRate: { ideal: 30 }
+                    }
+                };
+                
+                // Kamera-Stream anfordern
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                const video = document.getElementById('video');
+                video.srcObject = stream;
+                
+                // Wichtige Video-Attribute setzen
+                video.setAttribute('autoplay', '');
+                video.setAttribute('playsinline', '');  // Wichtig für iOS
+                video.setAttribute('muted', '');
+                
+                // Warten bis Video-Metadaten geladen sind
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        resolve();
+                    };
+                });
+                
+                // Video abspielen
+                await video.play();
+                
+                // Video am Laufen halten
+                video.onpause = () => {
+                    video.play();
+                };
+
+                // Helligkeitserkennung einrichten
+                const canvas = document.createElement('canvas');
+                const context = canvas.getContext('2d');
+                const warningElement = document.getElementById('lightWarning');
+                let lastWarningTime = 0;
+                
+                // Helligkeit in regelmäßigen Abständen prüfen
+                setInterval(() => {
+                    try {
+                        // Nur prüfen wenn Video läuft
+                        if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            context.drawImage(video, 0, 0);
+                            
+                            // Mittleren Bereich des Bildes analysieren
+                            const centerX = Math.floor(canvas.width / 2);
+                            const centerY = Math.floor(canvas.height / 2);
+                            const sampleSize = 100; // Größe des zu prüfenden Bereichs
+                            
+                            const imageData = context.getImageData(
+                                centerX - sampleSize/2,
+                                centerY - sampleSize/2,
+                                sampleSize,
+                                sampleSize
+                            );
+                            
+                            // Durchschnittliche Helligkeit berechnen
+                            let brightness = 0;
+                            for (let i = 0; i < imageData.data.length; i += 4) {
+                                const r = imageData.data[i];
+                                const g = imageData.data[i + 1];
+                                const b = imageData.data[i + 2];
+                                brightness += (r + g + b) / 3;
+                            }
+                            brightness = brightness / (sampleSize * sampleSize);
+                            
+                            // Warnung anzeigen wenn zu dunkel
+                            const now = Date.now();
+                            if (brightness < 50) { // Schwellenwert für "zu dunkel"
+                                if (now - lastWarningTime > 3000) { // Maximal alle 3 Sekunden warnen
+                                    warningElement.style.display = 'block';
+                                    lastWarningTime = now;
+                                }
+                            } else {
+                                warningElement.style.display = 'none';
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Fehler bei Helligkeitsprüfung:', e);
+                    }
+                }, 1000); // Jede Sekunde prüfen
+
+                // ZXing Scanner initialisieren
+                const codeReader = new ZXing.BrowserMultiFormatReader();
+                const hints = new Map();
+                hints.set(ZXing.DecodeHintType.POSSIBLE_FORMATS, [
+                    ZXing.BarcodeFormat.EAN_13,
+                    ZXing.BarcodeFormat.EAN_8,
+                    ZXing.BarcodeFormat.CODE_128,
+                    ZXing.BarcodeFormat.CODE_39,
+                    ZXing.BarcodeFormat.UPC_A,
+                    ZXing.BarcodeFormat.UPC_E
+                ]);
+                hints.set(ZXing.DecodeHintType.TRY_HARDER, true);
+                
+                // Kontinuierliche Dekodierung starten
+                codeReader.decodeFromVideoDevice(undefined, 'video', (result, err) => {
+                    if (result) {
+                        try {
+                            const text = result.getText ? result.getText() : (result.text || '');
+                            if (text && text !== lastBarcode) {
+                                lastBarcode = text;
+                                document.getElementById('barcodeValue').textContent = lastBarcode;
+                                
+                                // Feedback Animation
+                                gsap.to('#video', {
+                                    border: '2px solid #4CAF50',
+                                    duration: 0.3,
+                                    yoyo: true,
+                                    repeat: 1,
+                                    onComplete: () => {
+                                        gsap.to('#video', {
+                                            border: '2px solid var(--video-border)',
+                                            duration: 0.3
+                                        });
+                                    }
+                                });
+                                
+                                showStatus('Barcode erkannt!', 'success');
+                                // Produktinformationen abrufen
+                                fetchProductInfo(lastBarcode);
+                            }
+                        } catch (e) {
+                            console.error('Fehler beim Verarbeiten des Ergebnisses:', e);
+                            showStatus('Fehler beim Verarbeiten des Barcodes', 'error');
+                        }
+                    }
+                }, hints);
+
+                // Sauberes Aufräumen beim Verlassen der Seite
+                window.addEventListener('beforeunload', () => {
+                    try {
+                        codeReader.reset();
+                    } catch (e) {
+                        // ignore
+                    }
+                    try {
+                        const tracks = video.srcObject && video.srcObject.getTracks ? video.srcObject.getTracks() : [];
+                        tracks.forEach(t => t.stop());
+                    } catch (e) {
+                        // ignore
+                    }
+                });
+
+            } catch (error) {
+                showStatus('Fehler beim Zugriff auf die Kamera', 'error');
+                console.error('Kamerafehler:', error);
+            }
+        }
+
+        // Starten
+        initScanner().catch(error => {
+            showStatus('Fehler beim Starten des Scanners', 'error');
+            console.error('Scanner-Fehler:', error);
+        });
+    </script>
+</body>
+</html>
