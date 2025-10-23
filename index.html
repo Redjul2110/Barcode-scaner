@@ -699,16 +699,18 @@
             navigator.mediaDevices.enumerateDevices()
                 .then(devices => {
                     const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                    // Auf Mobilgeräten immer anzeigen (auch wenn nur eine Kamera erkannt wird, könnte Front/Rück verfügbar sein)
-                    if (videoDevices.length <= 1 && window.innerWidth > 768) {
-                        // Wenn nur eine Kamera und nicht mobil, Button ausblenden
+                    const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+                    // Auf Mobilgeräten und Chrome immer anzeigen (auch wenn nur eine Kamera erkannt wird, könnte Front/Rück verfügbar sein)
+                    if (videoDevices.length <= 1 && window.innerWidth > 768 && !isChrome) {
+                        // Wenn nur eine Kamera und nicht mobil und nicht Chrome, Button ausblenden
                         switchBtn.style.display = 'none';
                     }
                 })
                 .catch(err => {
                     console.error('Fehler beim Prüfen der Kameras:', err);
-                    // Auf Mobilgeräten auch bei Fehler anzeigen
-                    if (window.innerWidth > 768) {
+                    const isChrome = /Chrome/.test(navigator.userAgent) && /Google Inc/.test(navigator.vendor);
+                    // Auf Mobilgeräten und Chrome auch bei Fehler anzeigen
+                    if (window.innerWidth > 768 && !isChrome) {
                         switchBtn.style.display = 'none';
                     }
                 });
